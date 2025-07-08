@@ -2,45 +2,57 @@
 import express from 'express';
 const router = express.Router();
 import User from '../models/user.js';
-import { auth } from '../middleware/auth.js';
 import bcrypt from 'bcryptjs';
 import { check, validationResult } from 'express-validator';
+import { auth, admin } from '../middleware/auth.js';
 
-// @route   GET api/users/:id
-// @desc    Get user profile
-// @access  Private
+
+
+// Get all students (admin only)
+router.get('/students', auth, admin, async (req, res) => {
+  try {
+    console.log('Fetching all students');
+    const students = await User.find({ role: 'student' })
+      .select('-password')
+      .sort({ createdAt: -1 });
+    res.json(students);
+  } catch (error) {
+    console.error('Error in GET /api/students:', error);
+    res.status(500).json({ 
+      message: 'Error fetching students',
+      error: error.message 
+    });
+  }
+});
+
+// Get user profile (auth required - users can only access their own profile, admins can access any)
 router.get('/:id', auth, async (req, res) => {
   try {
-    // Check if the requested user matches the authenticated user
-    if (req.params.id !== req.user.id) {
-      return res.status(403).json({ msg: 'Not authorized to access this profile' });
+    // Check if user is requesting their own profile or if they're an admin
+    if (req.user.role !== 'admin' && req.user.id !== req.params.id) {
+      return res.status(403).json({ message: 'Not authorized to view this profile' });
     }
 
     const user = await User.findById(req.params.id).select('-password');
     if (!user) {
-      return res.status(404).json({ msg: 'User not found' });
+      return res.status(404).json({ message: 'User not found' });
     }
-
     res.json(user);
   } catch (err) {
     console.error(err.message);
     if (err.kind === 'ObjectId') {
-      return res.status(404).json({ msg: 'User not found' });
+      return res.status(404).json({ message: 'User not found' });
     }
     res.status(500).send('Server Error');
   }
 });
 
-// @route   PUT api/users/:id
-// @desc    Update user profile
-// @access  Private
+// Update user profile (auth required - users can only update their own profile, admins can update any)
 router.put('/:id', [
   auth,
-  [
     check('name', 'Name is required').not().isEmpty(),
     check('email', 'Please include a valid email').isEmail(),
     check('password', 'Password must be 6 or more characters').optional().isLength({ min: 6 })
-  ]
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -48,9 +60,9 @@ router.put('/:id', [
   }
 
   try {
-    // Check if the requested user matches the authenticated user
-    if (req.params.id !== req.user.id) {
-      return res.status(403).json({ msg: 'Not authorized to update this profile' });
+    // Check if user is updating their own profile or if they're an admin
+    if (req.user.role !== 'admin' && req.user.id !== req.params.id) {
+      return res.status(403).json({ message: 'Not authorized to update this profile' });
     }
 
     const { name, email, password } = req.body;
@@ -73,8 +85,12 @@ router.put('/:id', [
       { new: true }
     ).select('-password');
 
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
     res.json({ 
-      msg: 'Profile updated successfully',
+      message: 'Profile updated successfully',
       user 
     });
   } catch (err) {
@@ -82,57 +98,30 @@ router.put('/:id', [
     
     // Handle duplicate email error
     if (err.code === 11000) {
-      return res.status(400).json({ msg: 'Email already exists' });
+      return res.status(400).json({ message: 'Email already exists' });
     }
     
     res.status(500).send('Server Error');
   }
 });
-// Get all students (admin only)
-router.get('/students', async (req, res) => {
-    console.log("viewing students");
-    try {
-      // Check if user is admin
-      if (req.user.role !== 'admin') {
-        return res.status(403).json({ message: 'Unauthorized access' });
-      }
-  
-      // Find all students (role = 'student')
-      const students = await User.find({ role: 'student' })
-        .select('-password')
-        .sort({ createdAt: -1 });
-  
-      res.json(students);
-    } catch (error) {
-      console.error('Error fetching students:', error);
-      res.status(500).json({ message: 'Server error' });
+
+// Delete user (admin only)
+router.delete('/:id', auth, admin, async (req, res) => {
+  try {
+    console.log(`Deleting user with ID: ${req.params.id}`);
+    const user = await User.findByIdAndDelete(req.params.id);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
     }
-  });
-  
-  // Delete a user (admin only)
-  router.delete('/:id', async (req, res) => {
-    try {
-      
-      // Check if user is admin
-      if (req.user.role !== 'admin') {
-        return res.status(403).json({ message: 'Unauthorized access' });
-      }
-  
-      // Prevent admin from deleting themselves
-      if (req.user.id === req.params.id) {
-        return res.status(400).json({ message: 'Cannot delete your own account' });
-      }
-  
-      const user = await User.findByIdAndDelete(req.params.id);
-      
-      if (!user) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-  
-      res.json({ message: 'User deleted successfully' });
+
+    res.json({ message: 'User deleted successfully' });
     } catch (error) {
-      console.error('Error deleting user:', error);
-      res.status(500).json({ message: 'Server error' });
+    console.error('Error in DELETE /api/users:', error);
+      res.status(500).json({ 
+      message: 'Error deleting user',
+        error: error.message 
+      });
     }
   });
 

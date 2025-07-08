@@ -25,10 +25,10 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err => console.error(err));
 
 // Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/assignments', assignmentRoutes);
-app.use('/api/notices', noticeRoutes);
+app.use('/api/auth', authRoutes); // Auth routes (public)
+app.use('/api/users', userRoutes); // User routes (mixed auth)
+app.use('/api/assignments', assignmentRoutes); // Assignment routes (protected)
+app.use('/api/notices', noticeRoutes); // Notice routes (protected)
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
