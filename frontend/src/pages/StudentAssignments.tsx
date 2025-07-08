@@ -65,7 +65,6 @@ const StudentAssignments = () => {
       const response = await axios.get<Assignment[]>('http://localhost:3001/api/assignments', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      console.log("response.data", response.data);
       setAssignments(response.data);
     } catch (error) {
       console.error('Error fetching assignments:', error);
@@ -91,9 +90,6 @@ const StudentAssignments = () => {
       const token = localStorage.getItem('token');
       const aid = getAssignmentId(selectedAssignment);
       
-      console.log('Submitting to assignment ID:', aid);
-      console.log('File being submitted:', submissionForm.file);
-
       await axios.post(
         `http://localhost:3001/api/assignments/${aid}/submit`,
         formData,
@@ -234,6 +230,14 @@ const StudentAssignments = () => {
     return userSubmission && userSubmission.marks === undefined; // Can delete only if not graded
   };
 
+  const buildFileUrl = (path: string | undefined) => {
+    if (!path) return '#';
+    // If already absolute URL, return as is
+    if (/^https?:\/\//i.test(path)) return path;
+    const sanitized = path.replace(/\\/g, '/');
+    return `http://localhost:3001/${sanitized}`;
+  };
+
   if (loading && assignments.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-96">
@@ -272,59 +276,6 @@ const StudentAssignments = () => {
           }`}>
             {message.text}
           </p>
-        </div>
-      )}
-
-      {/* Enhanced Debug Section - Remove after fixing */}
-      {process.env.NODE_ENV === 'development' && user?.role === 'student' && (
-        <div className="bg-gray-100 p-4 rounded-lg mb-4 text-xs">
-          <p><strong>Debug Info:</strong></p>
-          <p>User ID: {JSON.stringify(user.id || user._id)}</p>
-          <p>User Object: {JSON.stringify(user)}</p>
-          {assignments.length > 0 && (
-            <div>
-              <p>First Assignment ID: {assignments[0]?.id}</p>
-              <p>First Assignment Submissions:</p>
-              <pre>{JSON.stringify(assignments[0]?.submissions, null, 2)}</pre>
-              <div className="flex space-x-2 mt-2">
-                <button 
-                  onClick={async () => {
-                    try {
-                      const token = localStorage.getItem('token');
-                      const response = await axios.get(`http://localhost:3001/api/assignments/debug/${user.id}`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                      });
-                      console.log('DEBUG RESPONSE:', response.data);
-                      alert('Check console for detailed debug info');
-                    } catch (error) {
-                      console.error('Debug error:', error);
-                      alert('Debug failed - check console');
-                    }
-                  }}
-                  className="px-3 py-1 bg-blue-500 text-white rounded text-xs"
-                >
-                  Run Database Debug
-                </button>
-                <button 
-                  onClick={async () => {
-                    try {
-                      const token = localStorage.getItem('token');
-                      const response = await axios.get('http://localhost:3001/api/assignments', {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                      });
-                      console.log('ASSIGNMENTS RAW RESPONSE:', response.data);
-                      alert('Check console for raw assignments data');
-                    } catch (error) {
-                      console.error('Assignments fetch error:', error);
-                    }
-                  }}
-                  className="px-3 py-1 bg-green-500 text-white rounded text-xs"
-                >
-                  Check Raw Data
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -369,7 +320,7 @@ const StudentAssignments = () => {
                             <span className="text-sm font-medium text-primary-700">Assignment File</span>
                           </div>
                           <a
-                            href={assignment.file}
+                            href={buildFileUrl(assignment.file)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center space-x-1 text-primary-600 hover:text-primary-700 text-sm font-medium"
@@ -412,7 +363,7 @@ const StudentAssignments = () => {
                       </h4>
                       <div className="flex items-center space-x-2">
                         <a
-                          href={userSubmission.submissionFile}
+                          href={buildFileUrl(userSubmission.submissionFile)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center space-x-2 px-3 py-2 text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-all duration-200 border border-primary-200"

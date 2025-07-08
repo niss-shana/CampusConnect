@@ -11,6 +11,11 @@ import {
   UserCheck
 } from 'lucide-react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+
+// Create a new axios instance without auth headers
+const publicAxios = axios.create();
 
 interface Student {
   id: string;
@@ -22,6 +27,8 @@ interface Student {
 }
 
 const Students = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,8 +38,13 @@ const Students = () => {
   const [message, setMessage] = useState({ type: '', text: '' });
 
   useEffect(() => {
+    // Check if user is admin
+    if (!user || user.role !== 'admin') {
+      navigate('/login');
+      return;
+    }
     fetchStudents();
-  }, []);
+  }, [user, navigate]);
 
   useEffect(() => {
     const filtered = students.filter(student =>
@@ -44,7 +56,14 @@ const Students = () => {
 
   const fetchStudents = async () => {
     try {
-      const response = await axios.get('http://localhost:3001/api/users/students');
+      setMessage({ type: '', text: '' });
+      const token = localStorage.getItem('token');
+      const response = await axios.get('http://localhost:3001/api/users/students', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
       const formattedStudents = response.data.map((student: any) => ({
         id: student._id,
         name: student.name,
@@ -57,7 +76,14 @@ const Students = () => {
       setStudents(formattedStudents);
     } catch (error) {
       console.error('Error fetching students:', error);
-      setMessage({ type: 'error', text: 'Failed to load students' });
+      if (error.response?.status === 401) {
+        navigate('/login');
+        return;
+      }
+      setMessage({ 
+        type: 'error', 
+        text: error.response?.data?.message || 'Failed to load students. Please try again later.' 
+      });
     } finally {
       setLoading(false);
     }
@@ -70,12 +96,21 @@ const Students = () => {
     setMessage({ type: '', text: '' });
 
     try {
-      await axios.delete(`http://localhost:3001/api/students/${selectedStudent.id}`);
+      const token = localStorage.getItem('token');
+      await axios.delete(`http://localhost:3001/api/users/${selectedStudent.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       setMessage({ type: 'success', text: 'Student deleted successfully' });
       setShowDeleteModal(false);
       setSelectedStudent(null);
       fetchStudents();
     } catch (error) {
+      if (error.response?.status === 401) {
+        navigate('/login');
+        return;
+      }
       setMessage({ 
         type: 'error', 
         text: error.response?.data?.message || 'Failed to delete student' 
@@ -215,45 +250,43 @@ const Students = () => {
               </thead>
               <tbody>
                 {filteredStudents.map((student) => (
-                  <tr key={student.id} className="border-b border-primary-50 hover:bg-primary-25 transition-colors duration-200">
+                  <tr key={student.id} className="border-b border-primary-50 hover:bg-primary-50">
                     <td className="p-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-                          <span className="font-semibold text-primary-700">
+                      <div className="flex items-center">
+                        <div className="w-8 h-8 bg-accent-600 rounded-full flex items-center justify-center mr-3">
+                          <span className="text-white text-sm font-semibold">
                             {student.name.charAt(0).toUpperCase()}
                           </span>
                         </div>
                         <div>
-                          <p className="font-semibold text-primary-900">{student.name}</p>
-                          <p className="text-sm text-primary-500 capitalize">{student.role}</p>
+                          <p className="font-medium text-primary-900">{student.name}</p>
+                          <p className="text-sm text-primary-500">Student</p>
                         </div>
                       </div>
                     </td>
                     <td className="p-4">
-                      <div className="flex items-center space-x-2">
-                        <Mail className="h-4 w-4 text-primary-400" />
-                        <span className="text-primary-700">{student.email}</span>
+                      <div className="flex items-center">
+                        <Mail className="h-4 w-4 text-primary-400 mr-2" />
+                        <span className="text-primary-600">{student.email}</span>
                       </div>
                     </td>
                     <td className="p-4">
-                      <div className="flex items-center space-x-2">
-                        <Calendar className="h-4 w-4 text-primary-400" />
-                        <span className="text-primary-700">{formatDate(student.createdAt)}</span>
-                      </div>
+                      <span className="text-primary-600">{formatDate(student.createdAt)}</span>
                     </td>
                     <td className="p-4">
-                      <span className="text-primary-700">
+                      <span className="text-primary-600">
                         {student.lastLogin ? formatDate(student.lastLogin) : 'Never'}
                       </span>
                     </td>
-                    <td className="p-4 text-center">
+                    <td className="p-4">
+                      <div className="flex justify-center">
                       <button
                         onClick={() => openDeleteModal(student)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
-                        title="Delete Student"
+                          className="p-2 hover:bg-red-50 rounded-lg transition-colors"
                       >
-                        <Trash2 className="h-5 w-5" />
+                          <Trash2 className="h-5 w-5 text-red-500" />
                       </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -261,81 +294,47 @@ const Students = () => {
             </table>
           </div>
         ) : (
-          <div className="text-center py-16">
-            <Users className="h-16 w-16 text-primary-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-primary-900 mb-2">
-              {searchTerm ? 'No students found' : 'No students registered'}
-            </h3>
-            <p className="text-primary-600">
-              {searchTerm 
-                ? `No students match "${searchTerm}". Try a different search term.`
-                : 'No students have registered yet.'
-              }
-            </p>
+          <div className="text-center py-8">
+            <p className="text-primary-500">No students found</p>
           </div>
         )}
       </div>
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Modal */}
       {showDeleteModal && selectedStudent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full">
-            <div className="flex justify-between items-center mb-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <div className="flex justify-between items-start mb-4">
+              <div>
               <h3 className="text-lg font-semibold text-primary-900">Delete Student</h3>
+                <p className="text-primary-600 mt-1">This action cannot be undone.</p>
+              </div>
               <button
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  setSelectedStudent(null);
-                }}
-                className="text-primary-400 hover:text-primary-600"
+                onClick={() => setShowDeleteModal(false)}
+                className="p-2 hover:bg-primary-50 rounded-lg transition-colors"
               >
-                <X className="h-5 w-5" />
+                <X className="h-5 w-5 text-primary-500" />
               </button>
             </div>
 
             <div className="mb-6">
-              <div className="flex items-center space-x-3 p-4 bg-red-50 rounded-lg border border-red-200">
-                <AlertCircle className="h-8 w-8 text-red-600 flex-shrink-0" />
-                <div>
-                  <p className="font-medium text-red-900">Are you sure you want to delete this student?</p>
-                  <p className="text-sm text-red-700 mt-1">This action cannot be undone.</p>
-                </div>
-              </div>
-
-              <div className="mt-4 p-4 bg-primary-50 rounded-lg border border-primary-200">
-                <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center">
-                    <span className="font-semibold text-primary-700 text-lg">
-                      {selectedStudent.name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-primary-900">{selectedStudent.name}</p>
-                    <p className="text-sm text-primary-600">{selectedStudent.email}</p>
-                    <p className="text-xs text-primary-500">
-                      Joined: {formatDate(selectedStudent.createdAt)}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <p className="text-primary-700">
+                Are you sure you want to delete <span className="font-semibold">{selectedStudent.name}</span>?
+              </p>
             </div>
 
             <div className="flex justify-end space-x-3">
               <button
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  setSelectedStudent(null);
-                }}
-                className="px-4 py-2 text-primary-700 hover:bg-primary-50 rounded-lg transition-colors duration-200"
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDeleteStudent}
-                disabled={loading}
-                className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 disabled:opacity-50 font-medium"
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
-                {loading ? 'Deleting...' : 'Delete Student'}
+                Delete
               </button>
             </div>
           </div>

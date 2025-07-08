@@ -283,6 +283,14 @@ const AdminAssignments = () => {
     return { totalSubmissions, gradedSubmissions, avgGrade: gradedSubmissions > 0 ? avgGrade : 0 };
   };
 
+  const buildFileUrl = (path: string | undefined) => {
+    if (!path) return '#';
+    // If already absolute URL, return as is
+    if (/^https?:\/\//i.test(path)) return path;
+    const sanitized = path.replace(/\\/g, '/');
+    return `http://localhost:3001/${sanitized}`;
+  };
+
   if (loading && assignments.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-96">

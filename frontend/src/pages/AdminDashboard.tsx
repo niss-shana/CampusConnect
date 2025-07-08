@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../hooks/useAuth';
 import { 
   Users, 
   FileText, 
@@ -12,17 +11,52 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 
+interface Stats {
+  totalStudents: number;
+  totalAssignments: number;
+  pendingGrading: number;
+  totalNotices: number;
+}
+
+interface User {
+  _id: string;
+  name: string;
+  email: string;
+  role: string;
+  createdAt: string;
+}
+
+interface Submission {
+  _id: string;
+  studentId: string;
+  studentName: string;
+  submissionFile: string;
+  submittedAt: string;
+  marks?: number;
+  feedback?: string;
+  gradedAt?: string;
+}
+
+interface Assignment {
+  _id: string;
+  title: string;
+  description: string;
+  dueDate: string;
+  createdAt: string;
+  submissions: Submission[];
+}
+
 const AdminDashboard = () => {
-  const { user } = useAuth();
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<Stats>({
     totalStudents: 0,
     totalAssignments: 0,
     pendingGrading: 0,
     totalNotices: 0
   });
-  const [recentAssignments, setRecentAssignments] = useState([]);
-  const [recentStudents, setRecentStudents] = useState([]);
+  const [recentAssignments, setRecentAssignments] = useState<Assignment[]>([]);
+  const [recentStudents, setRecentStudents] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDashboardData();
@@ -30,18 +64,19 @@ const AdminDashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const [usersRes, assignmentsRes, noticesRes] = await Promise.all([
-        axios.get('http://localhost:3001/api/users'),
-        axios.get('http://localhost:3001/api/assignments'),
+      setError(null);
+      const [studentsRes, assignmentsRes, noticesRes] = await Promise.all([
+        axios.get<User[]>('http://localhost:3001/api/users/students'),
+        axios.get<Assignment[]>('http://localhost:3001/api/assignments'),
         axios.get('http://localhost:3001/api/notices')
       ]);
 
-      const users = usersRes.data;
-      const assignments = assignmentsRes.data;
-      const notices = noticesRes.data;
+      const students = studentsRes.data;
+      const assignments = assignmentsRes.data || [];
+      const notices = noticesRes.data || [];
 
-      const students = users.filter(u => u.role === 'student');
-      const pendingGrading = assignments.filter(a => a.grade === null).length;
+      // Calculate stats
+      const pendingGrading = assignments.filter(a => !a.submissions?.some(s => s.marks !== undefined)).length;
 
       setStats({
         totalStudents: students.length,
@@ -50,16 +85,41 @@ const AdminDashboard = () => {
         totalNotices: notices.length
       });
 
-      setRecentAssignments(assignments.slice(0, 5));
-      setRecentStudents(students.slice(0, 5));
+      // Get recent assignments with submissions
+      const recentAssignmentsData = assignments
+        .filter(a => a.submissions?.length > 0)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 5);
+
+      setRecentAssignments(recentAssignmentsData);
+
+      // Get recent students
+      const recentStudentsData = students
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 5);
+
+      setRecentStudents(recentStudentsData);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      setError('Failed to load dashboard data. Please try again later.');
     } finally {
       setLoading(false);
     }
   };
 
-  const StatCard = ({ title, value, icon: Icon, color, subtitle }) => (
+  const StatCard = ({ 
+    title, 
+    value, 
+    icon: Icon, 
+    color, 
+    subtitle 
+  }: { 
+    title: string;
+    value: number;
+    icon: React.ElementType;
+    color: string;
+    subtitle: string;
+  }) => (
     <div className="bg-white p-6 rounded-xl shadow-soft hover:shadow-medium transition-shadow duration-200">
       <div className="flex items-center justify-between">
         <div>
@@ -93,6 +153,14 @@ const AdminDashboard = () => {
         <p className="text-primary-200">Manage your campus portal</p>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg flex items-center">
+          <AlertTriangle className="h-5 w-5 mr-2" />
+          {error}
+        </div>
+      )}
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
@@ -107,7 +175,7 @@ const AdminDashboard = () => {
           value={stats.totalAssignments}
           icon={FileText}
           color="bg-accent-600"
-          subtitle="Submitted"
+          subtitle="Created"
         />
         <StatCard
           title="Pending Grading"
@@ -136,17 +204,17 @@ const AdminDashboard = () => {
           <div className="space-y-4">
             {recentAssignments.length > 0 ? (
               recentAssignments.map((assignment) => (
-                <div key={assignment.id} className="flex items-center justify-between p-3 bg-primary-50 rounded-lg">
+                <div key={assignment._id} className="flex items-center justify-between p-3 bg-primary-50 rounded-lg">
                   <div className="flex-1">
                     <h3 className="font-medium text-primary-900">{assignment.title}</h3>
                     <p className="text-sm text-primary-600">
-                      By {assignment.studentName} • {new Date(assignment.submittedAt).toLocaleDateString()}
+                      Due: {new Date(assignment.dueDate).toLocaleDateString()}
                     </p>
                   </div>
                   <div className="text-right">
-                    {assignment.grade !== null ? (
+                    {assignment.submissions.some(s => s.marks !== undefined) ? (
                       <span className="text-sm font-semibold text-green-600">
-                        {assignment.grade}/100
+                        Graded
                       </span>
                     ) : (
                       <span className="text-sm text-orange-600 flex items-center">
@@ -172,7 +240,7 @@ const AdminDashboard = () => {
           <div className="space-y-4">
             {recentStudents.length > 0 ? (
               recentStudents.map((student) => (
-                <div key={student.id} className="flex items-center p-3 bg-secondary-50 rounded-lg">
+                <div key={student._id} className="flex items-center p-3 bg-secondary-50 rounded-lg">
                   <div className="w-10 h-10 bg-accent-600 rounded-full flex items-center justify-center mr-3">
                     <span className="text-white font-semibold">
                       {student.name.charAt(0).toUpperCase()}
@@ -184,9 +252,7 @@ const AdminDashboard = () => {
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-primary-500">
-                      {'createdAt' in student && student.createdAt
-                        ? new Date(student.createdAt as string | number | Date).toLocaleDateString()
-                        : 'N/A'}
+                      {new Date(student.createdAt).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
@@ -203,7 +269,7 @@ const AdminDashboard = () => {
         <h2 className="text-lg font-semibold text-primary-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <a
-            href="/assignments"
+            href="/admin/assignments"
             className="flex items-center justify-center p-4 bg-accent-600 text-white rounded-lg hover:bg-accent-700 transition-colors duration-200"
           >
             <Award className="h-5 w-5 mr-2" />
