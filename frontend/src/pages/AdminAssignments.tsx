@@ -17,49 +17,21 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 
-interface Assignment {
-  id: string;
-  title: string;
-  description: string;
-  totalMarks: number;
-  dueDate: string;
-  file?: string;
-  fileName?: string;
-  createdAt: string;
-  submissions?: AssignmentSubmission[];
-}
-
-interface AssignmentSubmission {
-  id: string;
-  studentId: string;
-  studentName: string;
-  submissionFile: string;
-  submittedAt: string;
-  marks?: number;
-  feedback?: string;
-  gradedAt?: string;
-}
-
-interface UploadFormData {
-  title: string;
-  description: string;
-  totalMarks: string;
-  dueDate: string;
-  file: File | null;
-}
-
 const AdminAssignments = () => {
   const { user } = useAuth();
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showGradeModal, setShowGradeModal] = useState(false);
-  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
-  const [selectedSubmission, setSelectedSubmission] = useState<AssignmentSubmission | null>(null);
+  const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [message, setMessage] = useState({ type: '', text: '' });
 
-  const [uploadForm, setUploadForm] = useState<UploadFormData>({
+// Get API base URL from environment variables
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
+
+  const [uploadForm, setUploadForm] = useState({
     title: '',
     description: '',
     totalMarks: '100',
@@ -67,7 +39,7 @@ const AdminAssignments = () => {
     file: null
   });
 
-  const [editForm, setEditForm] = useState<UploadFormData>({
+  const [editForm, setEditForm] = useState({
     title: '',
     description: '',
     totalMarks: '100',
@@ -89,9 +61,10 @@ const AdminAssignments = () => {
       const token = localStorage.getItem('token');
       if (!token) throw new Error('No authentication token found');
 
-      const response = await axios.get<Assignment[]>('http://localhost:3001/api/assignments', {
+      const response = await axios.get(`${API_BASE_URL}/assignments`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      console.log('Admin fetched assignments:', response.data);
       setAssignments(response.data);
     } catch (error) {
       console.error('Error fetching assignments:', error);
@@ -101,7 +74,7 @@ const AdminAssignments = () => {
     }
   };
 
-  const handleCreateAssignment = async (e: React.FormEvent) => {
+  const handleCreateAssignment = async (e) => {
     e.preventDefault();
     setLoading(true);
     setMessage({ type: '', text: '' });
@@ -117,7 +90,7 @@ const AdminAssignments = () => {
       }
 
       const token = localStorage.getItem('token');
-      await axios.post('http://localhost:3001/api/assignments', formData, {
+      await axios.post(`${API_BASE_URL}/assignments`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           'Authorization': `Bearer ${token}`
@@ -138,9 +111,9 @@ const AdminAssignments = () => {
     }
   };
 
-  const getAssignmentId = (a: Assignment | null) => (a ? (a as any).id ?? (a as any)._id : undefined);
+  const getAssignmentId = (a) => (a ? (a.id ?? a._id) : undefined);
 
-  const handleGrade = async (e: React.FormEvent) => {
+  const handleGrade = async (e) => {
     e.preventDefault();
     if (!selectedAssignment || !selectedSubmission) return;
 
@@ -151,7 +124,7 @@ const AdminAssignments = () => {
       const token = localStorage.getItem('token');
       const aid = getAssignmentId(selectedAssignment);
       await axios.post(
-        `http://localhost:3001/api/assignments/${aid}/submissions/${selectedSubmission.id}/grade`,
+        `${API_BASE_URL}/assignments/${aid}/submissions/${selectedSubmission.id}/grade`,
         {
           marks: parseInt(gradeForm.marks),
           feedback: gradeForm.feedback
@@ -177,13 +150,13 @@ const AdminAssignments = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id) => {
     if (!confirm('Are you sure you want to delete this assignment? This will also delete all submissions.')) return;
 
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://localhost:3001/api/assignments/${id}`, {
+      await axios.delete(`${API_BASE_URL}/assignments/${id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setMessage({ type: 'success', text: 'Assignment deleted successfully' });
@@ -198,21 +171,33 @@ const AdminAssignments = () => {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Date not available';
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return 'Invalid date';
+      }
+      
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', dateString, error);
+      return 'Date formatting error';
+    }
   };
 
-  const isOverdue = (dueDate: string) => {
+  const isOverdue = (dueDate) => {
     return new Date(dueDate) < new Date();
   };
 
-  const openEditModal = (assignment: Assignment) => {
+  const openEditModal = (assignment) => {
     setSelectedAssignment(assignment);
     setEditForm({
       title: assignment.title,
@@ -224,7 +209,7 @@ const AdminAssignments = () => {
     setShowEditModal(true);
   };
 
-  const openGradeModal = (assignment: Assignment, submission: AssignmentSubmission) => {
+  const openGradeModal = (assignment, submission) => {
     setSelectedAssignment(assignment);
     setSelectedSubmission(submission);
     setGradeForm({
@@ -234,7 +219,7 @@ const AdminAssignments = () => {
     setShowGradeModal(true);
   };
 
-  const handleUpdateAssignment = async (e: React.FormEvent) => {
+  const handleUpdateAssignment = async (e) => {
     e.preventDefault();
     if (!selectedAssignment) return;
 
@@ -253,7 +238,7 @@ const AdminAssignments = () => {
 
       const token = localStorage.getItem('token');
       const aid = getAssignmentId(selectedAssignment);
-      await axios.put(`http://localhost:3001/api/assignments/${aid}`, formData, {
+      await axios.put(`${API_BASE_URL}/assignments/${aid}`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           'Authorization': `Bearer ${token}`
@@ -274,21 +259,58 @@ const AdminAssignments = () => {
     }
   };
 
-  const getSubmissionStats = (assignment: Assignment) => {
+  const getSubmissionStats = (assignment) => {
     const totalSubmissions = assignment.submissions?.length || 0;
-    const gradedSubmissions = assignment.submissions?.filter(s => s.marks !== undefined).length || 0;
-    const avgGrade = assignment.submissions?.filter(s => s.marks !== undefined)
+    const gradedSubmissions = assignment.submissions?.filter(s => s.marks !== undefined && s.marks !== null).length || 0;
+    const avgGrade = assignment.submissions?.filter(s => s.marks !== undefined && s.marks !== null)
       .reduce((sum, s) => sum + (s.marks || 0), 0) / (gradedSubmissions || 1);
 
     return { totalSubmissions, gradedSubmissions, avgGrade: gradedSubmissions > 0 ? avgGrade : 0 };
   };
 
-  const buildFileUrl = (path: string | undefined) => {
+  const buildFileUrl = (path) => {
     if (!path) return '#';
+    console.log('Building file URL for path:', path);
+    
     // If already absolute URL, return as is
-    if (/^https?:\/\//i.test(path)) return path;
+    if (/^https?:\/\//i.test(path)) {
+      console.log('Already absolute URL:', path);
+      return path;
+    }
+    
+    // Clean up the path
     const sanitized = path.replace(/\\/g, '/');
-    return `http://localhost:3001/${sanitized}`;
+    const fullUrl = `${API_BASE_URL}/${sanitized}`;
+    console.log('Built file URL:', fullUrl);
+    return fullUrl;
+  };
+
+  // Helper function to get submission date with multiple fallbacks
+  const getSubmissionDate = (submission) => {
+    if (!submission) return null;
+    
+    // Try different possible date field names
+    const possibleDateFields = [
+      'submittedAt',
+      'submitted_at', 
+      'createdAt',
+      'created_at',
+      'dateSubmitted',
+      'date_submitted',
+      'timestamp',
+      'updatedAt',
+      'updated_at'
+    ];
+    
+    for (const field of possibleDateFields) {
+      if (submission[field]) {
+        console.log(`Using date field '${field}':`, submission[field]);
+        return submission[field];
+      }
+    }
+    
+    console.log('No valid date field found in submission:', submission);
+    return null;
   };
 
   if (loading && assignments.length === 0) {
@@ -354,7 +376,7 @@ const AdminAssignments = () => {
             </div>
             <div>
               <p className="text-2xl font-bold text-primary-900">
-                {assignments.reduce((sum, a) => sum + (a.submissions?.filter(s => s.marks !== undefined).length || 0), 0)}
+                {assignments.reduce((sum, a) => sum + (a.submissions?.filter(s => s.marks !== undefined && s.marks !== null).length || 0), 0)}
               </p>
               <p className="text-primary-600 text-sm">Graded Submissions</p>
             </div>
@@ -385,11 +407,11 @@ const AdminAssignments = () => {
       {/* Assignments List */}
       <div className="grid gap-6">
         {assignments.length > 0 ? (
-          assignments.map((assignment) => {
+          assignments.map((assignment, index) => {
             const stats = getSubmissionStats(assignment);
             
             return (
-              <div key={assignment.id} className="bg-white p-6 rounded-xl shadow-soft border border-primary-100">
+              <div key={assignment.id || assignment._id || index} className="bg-white p-6 rounded-xl shadow-soft border border-primary-100">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex-1">
                     <div className="flex items-start justify-between mb-3">
@@ -405,7 +427,7 @@ const AdminAssignments = () => {
                           <Edit className="h-5 w-5" />
                         </button>
                         <button
-                          onClick={() => handleDelete(assignment.id)}
+                          onClick={() => handleDelete(assignment.id || assignment._id)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
                           title="Delete Assignment"
                         >
@@ -439,7 +461,7 @@ const AdminAssignments = () => {
                       )}
                     </div>
 
-                    {/* Assignment File Download */}
+                    {/* Assignment File Download - FIXED */}
                     {assignment.file && (
                       <div className="mb-4 p-3 bg-primary-50 rounded-lg border border-primary-200">
                         <div className="flex items-center justify-between">
@@ -448,10 +470,14 @@ const AdminAssignments = () => {
                             <span className="text-sm font-medium text-primary-700">Assignment File</span>
                           </div>
                           <a
-                            href={assignment.file}
+                            href={buildFileUrl(assignment.file)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center space-x-1 text-primary-600 hover:text-primary-700 text-sm font-medium"
+                            onClick={(e) => {
+                              console.log('Clicking assignment file download:', assignment.file);
+                              console.log('Built URL:', buildFileUrl(assignment.file));
+                            }}
                           >
                             <Download className="h-4 w-4" />
                             <span>Download</span>
@@ -473,59 +499,67 @@ const AdminAssignments = () => {
                       Student Submissions ({assignment.submissions.length})
                     </h4>
                     <div className="space-y-3">
-                      {assignment.submissions.map((submission) => (
-                        <div key={submission.id} className="flex items-center justify-between bg-primary-50 p-4 rounded-lg border border-primary-200">
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="font-medium text-primary-900">{submission.studentName}</p>
-                                <p className="text-sm text-primary-600">
-                                  Submitted: {formatDate(submission.submittedAt)}
+                      {assignment.submissions.map((submission, subIndex) => {
+                        const submissionDate = getSubmissionDate(submission);
+                        
+                        return (
+                          <div key={submission.id || submission._id || subIndex} className="flex items-center justify-between bg-primary-50 p-4 rounded-lg border border-primary-200">
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="font-medium text-primary-900">{submission.studentName}</p>
+                                  <p className="text-sm text-primary-600">
+                                    Submitted: {submissionDate ? formatDate(submissionDate) : 'Date not available'}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  {(submission.marks !== undefined && submission.marks !== null) ? (
+                                    <div>
+                                      <p className="font-semibold text-green-600 text-lg">
+                                        {submission.marks}/{assignment.totalMarks}
+                                      </p>
+                                      <p className="text-xs text-green-500">
+                                        {Math.round((submission.marks / assignment.totalMarks) * 100)}%
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <span className="text-orange-600 font-medium text-sm px-3 py-1 bg-orange-50 rounded-full border border-orange-200">
+                                      PENDING GRADE
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              {submission.feedback && (
+                                <p className="text-sm text-primary-600 mt-2 bg-white p-2 rounded border">
+                                  <span className="font-medium">Feedback:</span> {submission.feedback}
                                 </p>
-                              </div>
-                              <div className="text-right">
-                                {submission.marks !== undefined ? (
-                                  <div>
-                                    <p className="font-semibold text-green-600 text-lg">
-                                      {submission.marks}/{assignment.totalMarks}
-                                    </p>
-                                    <p className="text-xs text-green-500">
-                                      {Math.round((submission.marks / assignment.totalMarks) * 100)}%
-                                    </p>
-                                  </div>
-                                ) : (
-                                  <span className="text-orange-600 font-medium text-sm px-3 py-1 bg-orange-50 rounded-full border border-orange-200">
-                                    PENDING GRADE
-                                  </span>
-                                )}
-                              </div>
+                              )}
                             </div>
-                            {submission.feedback && (
-                              <p className="text-sm text-primary-600 mt-2 bg-white p-2 rounded border">
-                                <span className="font-medium">Feedback:</span> {submission.feedback}
-                              </p>
-                            )}
+                            <div className="flex items-center space-x-2 ml-4">
+                              <button
+                                onClick={() => openGradeModal(assignment, submission)}
+                                className="p-2 text-primary-600 hover:bg-primary-100 rounded-lg transition-colors duration-200"
+                                title={(submission.marks !== undefined && submission.marks !== null) ? "Edit Grade" : "Grade Submission"}
+                              >
+                                <Award className="h-5 w-5" />
+                              </button>
+                              <a
+                                href={buildFileUrl(submission.submissionFile)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-2 text-primary-600 hover:bg-primary-100 rounded-lg transition-colors duration-200"
+                                title="Download Submission"
+                                onClick={() => {
+                                  console.log('Clicking submission download:', submission.submissionFile);
+                                  console.log('Built URL:', buildFileUrl(submission.submissionFile));
+                                }}
+                              >
+                                <Download className="h-5 w-5" />
+                              </a>
+                            </div>
                           </div>
-                          <div className="flex items-center space-x-2 ml-4">
-                            <button
-                              onClick={() => openGradeModal(assignment, submission)}
-                              className="p-2 text-primary-600 hover:bg-primary-100 rounded-lg transition-colors duration-200"
-                              title={submission.marks !== undefined ? "Edit Grade" : "Grade Submission"}
-                            >
-                              <Award className="h-5 w-5" />
-                            </button>
-                            <a
-                              href={submission.submissionFile}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-2 text-primary-600 hover:bg-primary-100 rounded-lg transition-colors duration-200"
-                              title="Download Submission"
-                            >
-                              <Download className="h-5 w-5" />
-                            </a>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -679,7 +713,7 @@ const AdminAssignments = () => {
           <div className="bg-white rounded-xl p-6 max-w-md w-full">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-primary-900">
-                {selectedSubmission.marks !== undefined ? 'Edit Grade' : 'Grade Submission'}
+                {(selectedSubmission.marks !== undefined && selectedSubmission.marks !== null) ? 'Edit Grade' : 'Grade Submission'}
               </h3>
               <button
                 onClick={() => {
@@ -696,10 +730,10 @@ const AdminAssignments = () => {
             <div className="mb-6 p-4 bg-primary-50 rounded-lg border border-primary-200">
               <h4 className="font-medium text-primary-900">{selectedAssignment.title}</h4>
               <p className="text-sm text-primary-600">Student: {selectedSubmission.studentName}</p>
-              <p className="text-sm text-primary-600">Submitted: {formatDate(selectedSubmission.submittedAt)}</p>
+              <p className="text-sm text-primary-600">Submitted: {formatDate(getSubmissionDate(selectedSubmission))}</p>
               <div className="mt-2">
                 <a
-                  href={selectedSubmission.submissionFile}
+                  href={buildFileUrl(selectedSubmission.submissionFile)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center space-x-1 text-primary-600 hover:text-primary-700 text-sm font-medium"

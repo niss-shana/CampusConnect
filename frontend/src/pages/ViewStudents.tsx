@@ -14,8 +14,8 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
-// Create a new axios instance without auth headers
-const publicAxios = axios.create();
+// Get API base URL from environment variables
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 
 interface Student {
   id: string;
@@ -58,7 +58,7 @@ const Students = () => {
     try {
       setMessage({ type: '', text: '' });
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:3001/api/users/students', {
+      const response = await axios.get(`${API_BASE_URL}/users/students`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -97,7 +97,7 @@ const Students = () => {
 
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://localhost:3001/api/users/${selectedStudent.id}`, {
+      await axios.delete(`${API_BASE_URL}/users/${selectedStudent.id}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

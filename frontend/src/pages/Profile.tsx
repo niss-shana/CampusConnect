@@ -16,6 +16,9 @@ const Profile = () => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
+  // Get API base URL from environment variables
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
+
   useEffect(() => {
     // Initialize form data directly from user if available
     if (user) {
@@ -52,7 +55,7 @@ const Profile = () => {
         updateData.password = formData.password;
       }
 
-      const response = await axios.put(`http://localhost:3001/api/users/${user.id}`, updateData);
+      const response = await axios.put(`${API_BASE_URL}/users/${user.id}`, updateData);
       setProfile(response.data.user || response.data); // Handle different response structures
       setIsEditing(false);
       setFormData(prev => ({ ...prev, password: '' }));

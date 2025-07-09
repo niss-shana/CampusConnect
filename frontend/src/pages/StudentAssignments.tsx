@@ -14,6 +14,9 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 
+// Get API base URL from environment variables
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
+
 interface Assignment {
   id: string;
   title: string;
@@ -27,6 +30,9 @@ interface Assignment {
 }
 
 interface AssignmentSubmission {
+  userId: string;
+  user_id: any;
+  student_id: string;
   id: string;
   studentId: string;
   studentName: string;
@@ -62,7 +68,7 @@ const StudentAssignments = () => {
       const token = localStorage.getItem('token');
       if (!token) throw new Error('No authentication token found');
 
-      const response = await axios.get<Assignment[]>('http://localhost:3001/api/assignments', {
+      const response = await axios.get<Assignment[]>(`${API_BASE_URL}/assignments`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setAssignments(response.data);
@@ -91,7 +97,7 @@ const StudentAssignments = () => {
       const aid = getAssignmentId(selectedAssignment);
       
       await axios.post(
-        `http://localhost:3001/api/assignments/${aid}/submit`,
+        `${API_BASE_URL}/assignments/${aid}/submit`,
         formData,
         {
           headers: {
@@ -125,7 +131,7 @@ const StudentAssignments = () => {
 
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://localhost:3001/api/assignments/${assignmentId}/submissions/${submissionId}`, {
+      await axios.delete(`${API_BASE_URL}/assignments/${assignmentId}/submissions/${submissionId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 

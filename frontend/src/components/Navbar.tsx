@@ -23,32 +23,33 @@ const Navbar = () => {
   };
 
   if (!user) {
-    return (
-      <nav className="bg-primary-900 shadow-soft">
-        <div className="container mx-auto px-4">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-2">
-              <BookOpen className="h-8 w-8 text-secondary-300" />
-              <span className="text-xl font-bold text-white">CampusConnect</span>
-            </div>
-            <div className="flex space-x-4">
-              <Link
-                to="/login"
-                className="text-secondary-200 hover:text-white transition-colors duration-200"
-              >
-                Login
-              </Link>
-              <Link
-                to="/register"
-                className="bg-accent-600 text-white px-4 py-2 rounded-lg hover:bg-accent-700 transition-colors duration-200"
-              >
-                Register
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-    );
+    // return (
+    //   <nav className="bg-primary-900 shadow-soft">
+    //     <div className="container mx-auto px-4">
+    //       <div className="flex justify-between items-center py-4">
+    //         <div className="flex items-center space-x-2">
+    //           <BookOpen className="h-8 w-8 text-secondary-300" />
+    //           <span className="text-xl font-bold text-white">CampusConnect</span>
+    //         </div>
+    //         <div className="flex space-x-4">
+    //           <Link
+    //             to="/login"
+    //             className="text-secondary-200 hover:text-white transition-colors duration-200"
+    //           >
+    //             Login
+    //           </Link>
+    //           <Link
+    //             to="/register"
+    //             className="bg-accent-600 text-white px-4 py-2 rounded-lg hover:bg-accent-700 transition-colors duration-200"
+    //           >
+    //             Register
+    //           </Link>
+    //         </div>
+    //       </div>
+    //     </div>
+    //   </nav>
+    // );
+    return null;
   }
 
   const menuItems = user.role === 'admin'

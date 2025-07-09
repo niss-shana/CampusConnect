@@ -12,6 +12,9 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 
+// Get API base URL from environment variables
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+
 const Notices = () => {
   const { user } = useAuth();
   const [notices, setNotices] = useState([]);
@@ -32,7 +35,8 @@ const Notices = () => {
 
   const fetchNotices = async () => {
     try {
-      const response = await axios.get('http://localhost:3001/api/notices');
+      setLoading(true);
+      const response = await axios.get(`${API_BASE_URL}/notices`);
       setNotices(response.data);
     } catch (error) {
       console.error('Error fetching notices:', error);
@@ -50,10 +54,10 @@ const Notices = () => {
     try {
       if (editingNotice) {
         console.log("Editing Notice ID:", editingNotice?.id);
-        await axios.put(`http://localhost:3001/api/notices/${editingNotice.id}`, formData);
+        await axios.put(`${API_BASE_URL}/notices/${editingNotice.id}`, formData);
         setMessage({ type: 'success', text: 'Notice updated successfully' });
       } else {
-        await axios.post('http://localhost:3001/api/notices', formData);
+        await axios.post(`${API_BASE_URL}/notices`, formData);
         setMessage({ type: 'success', text: 'Notice created successfully' });
       }
 
@@ -75,7 +79,7 @@ const Notices = () => {
     if (!confirm('Are you sure you want to delete this notice?')) return;
 
     try {
-      await axios.delete(`http://localhost:3001/api/notices/${id}`);
+      await axios.delete(`${API_BASE_URL}/notices/${id}`);
       setMessage({ type: 'success', text: 'Notice deleted successfully' });
       fetchNotices();
     } catch (error) {

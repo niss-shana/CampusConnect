@@ -7,56 +7,25 @@ import {
   Award,
   Clock,
   BookOpen,
-  AlertTriangle
+  AlertTriangle,
+  ArrowRight
 } from 'lucide-react';
 import axios from 'axios';
 
-interface Stats {
-  totalStudents: number;
-  totalAssignments: number;
-  pendingGrading: number;
-  totalNotices: number;
-}
-
-interface User {
-  _id: string;
-  name: string;
-  email: string;
-  role: string;
-  createdAt: string;
-}
-
-interface Submission {
-  _id: string;
-  studentId: string;
-  studentName: string;
-  submissionFile: string;
-  submittedAt: string;
-  marks?: number;
-  feedback?: string;
-  gradedAt?: string;
-}
-
-interface Assignment {
-  _id: string;
-  title: string;
-  description: string;
-  dueDate: string;
-  createdAt: string;
-  submissions: Submission[];
-}
-
 const AdminDashboard = () => {
-  const [stats, setStats] = useState<Stats>({
+  const [stats, setStats] = useState({
     totalStudents: 0,
     totalAssignments: 0,
     pendingGrading: 0,
     totalNotices: 0
   });
-  const [recentAssignments, setRecentAssignments] = useState<Assignment[]>([]);
-  const [recentStudents, setRecentStudents] = useState<User[]>([]);
+  const [recentAssignments, setRecentAssignments] = useState([]);
+  const [recentStudents, setRecentStudents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
+
+  // Get API base URL from environment variables
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 
   useEffect(() => {
     fetchDashboardData();
@@ -65,18 +34,37 @@ const AdminDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setError(null);
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
       const [studentsRes, assignmentsRes, noticesRes] = await Promise.all([
-        axios.get<User[]>('http://localhost:3001/api/users/students'),
-        axios.get<Assignment[]>('http://localhost:3001/api/assignments'),
-        axios.get('http://localhost:3001/api/notices')
+        axios.get(`${API_BASE_URL}/users/students`, { headers }),
+        axios.get(`${API_BASE_URL}/assignments`, { headers }),
+        axios.get(`${API_BASE_URL}/notices`, { headers })
       ]);
 
-      const students = studentsRes.data;
-      const assignments = assignmentsRes.data || [];
-      const notices = noticesRes.data || [];
+      const students = Array.isArray(studentsRes.data) ? studentsRes.data : [];
+      const assignments = Array.isArray(assignmentsRes.data) ? assignmentsRes.data : [];
+      const notices = Array.isArray(noticesRes.data) ? noticesRes.data : [];
 
-      // Calculate stats
-      const pendingGrading = assignments.filter(a => !a.submissions?.some(s => s.marks !== undefined)).length;
+      console.log('Dashboard data fetched:', {
+        students: students.length,
+        assignments: assignments.length,
+        notices: notices.length
+      });
+
+      // Calculate pending grading - assignments with submissions but no grades
+      const pendingGrading = assignments.filter(assignment => {
+        if (!assignment.submissions || assignment.submissions.length === 0) {
+          return false; // No submissions to grade
+        }
+        // Check if any submission is ungraded
+        return assignment.submissions.some(submission => 
+          submission.marks === undefined || 
+          submission.marks === null || 
+          submission.marks === ''
+        );
+      }).length;
 
       setStats({
         totalStudents: students.length,
@@ -85,20 +73,22 @@ const AdminDashboard = () => {
         totalNotices: notices.length
       });
 
-      // Get recent assignments with submissions
+      // Get recent assignments (all assignments, not just with submissions) - limit to 4
       const recentAssignmentsData = assignments
-        .filter(a => a.submissions?.length > 0)
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 5);
+        .sort((a, b) => new Date(b.createdAt || b.dateCreated || 0) - new Date(a.createdAt || a.dateCreated || 0))
+        .slice(0, 4); // Show max 4 recent assignments
 
       setRecentAssignments(recentAssignmentsData);
 
-      // Get recent students
+      // Get recent students - limit to 4
       const recentStudentsData = students
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 5);
+        .sort((a, b) => new Date(b.createdAt || b.dateCreated || 0) - new Date(a.createdAt || a.dateCreated || 0))
+        .slice(0, 4); // Show max 4 recent students
 
       setRecentStudents(recentStudentsData);
+
+      console.log('Recent assignments:', recentAssignmentsData);
+      console.log('Recent students:', recentStudentsData);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       setError('Failed to load dashboard data. Please try again later.');
@@ -113,26 +103,77 @@ const AdminDashboard = () => {
     icon: Icon, 
     color, 
     subtitle 
-  }: { 
-    title: string;
-    value: number;
-    icon: React.ElementType;
-    color: string;
-    subtitle: string;
   }) => (
-    <div className="bg-white p-6 rounded-xl shadow-soft hover:shadow-medium transition-shadow duration-200">
+    <div className="bg-white p-4 rounded-lg shadow-soft hover:shadow-medium transition-shadow duration-200">
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-primary-600">{title}</p>
-          <p className="text-2xl font-bold text-primary-900 mt-1">{value}</p>
-          {subtitle && <p className="text-xs text-primary-500 mt-1">{subtitle}</p>}
+        <div className="flex-1">
+          <p className="text-xs font-medium text-primary-600">{title}</p>
+          <p className="text-xl font-bold text-primary-900 mt-1">{value}</p>
+          {subtitle && <p className="text-xs text-primary-500 mt-0.5">{subtitle}</p>}
         </div>
-        <div className={`p-3 rounded-lg ${color}`}>
-          <Icon className="h-6 w-6 text-white" />
+        <div className={`p-2 rounded-lg ${color}`}>
+          <Icon className="h-4 w-4 text-white" />
         </div>
       </div>
     </div>
   );
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Date not available';
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return 'Invalid date';
+      }
+      
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', dateString, error);
+      return 'Date error';
+    }
+  };
+
+  const getAssignmentStatus = (assignment) => {
+    if (!assignment.submissions || assignment.submissions.length === 0) {
+      return {
+        text: 'No Submissions',
+        color: 'text-gray-600',
+        icon: null
+      };
+    }
+
+    const hasGradedSubmissions = assignment.submissions.some(s => 
+      s.marks !== undefined && s.marks !== null && s.marks !== ''
+    );
+    const hasUngradedSubmissions = assignment.submissions.some(s => 
+      s.marks === undefined || s.marks === null || s.marks === ''
+    );
+
+    if (hasUngradedSubmissions) {
+      return {
+        text: 'Pending Review',
+        color: 'text-orange-600',
+        icon: AlertTriangle
+      };
+    } else if (hasGradedSubmissions) {
+      return {
+        text: 'All Graded',
+        color: 'text-green-600',
+        icon: null
+      };
+    } else {
+      return {
+        text: 'No Submissions',
+        color: 'text-gray-600',
+        icon: null
+      };
+    }
+  };
 
   if (loading) {
     return (
@@ -161,8 +202,8 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Stats Grid - Made smaller */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Students"
           value={stats.totalStudents}
@@ -199,68 +240,114 @@ const AdminDashboard = () => {
         <div className="bg-white p-6 rounded-xl shadow-soft">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-primary-900">Recent Assignments</h2>
-            <FileText className="h-5 w-5 text-primary-600" />
+            <div className="flex items-center space-x-2">
+              <FileText className="h-5 w-5 text-primary-600" />
+              <a 
+                href="/admin/assignments" 
+                className="text-primary-600 hover:text-primary-700 text-sm font-medium flex items-center"
+              >
+                View All <ArrowRight className="h-3 w-3 ml-1" />
+              </a>
+            </div>
           </div>
           <div className="space-y-4">
             {recentAssignments.length > 0 ? (
-              recentAssignments.map((assignment) => (
-                <div key={assignment._id} className="flex items-center justify-between p-3 bg-primary-50 rounded-lg">
-                  <div className="flex-1">
-                    <h3 className="font-medium text-primary-900">{assignment.title}</h3>
-                    <p className="text-sm text-primary-600">
-                      Due: {new Date(assignment.dueDate).toLocaleDateString()}
-                    </p>
+              recentAssignments.map((assignment, index) => {
+                const status = getAssignmentStatus(assignment);
+                const StatusIcon = status.icon;
+                
+                return (
+                  <div key={assignment._id || assignment.id || index} className="flex items-center justify-between p-3 bg-primary-50 rounded-lg">
+                    <div className="flex-1">
+                      <h3 className="font-medium text-primary-900">{assignment.title || 'Untitled Assignment'}</h3>
+                      <p className="text-sm text-primary-600">
+                        Due: {formatDate(assignment.dueDate)}
+                      </p>
+                      <p className="text-xs text-primary-500">
+                        {assignment.submissions?.length || 0} submission{(assignment.submissions?.length || 0) !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className={`text-sm font-semibold ${status.color} flex items-center`}>
+                        {StatusIcon && <StatusIcon className="h-3 w-3 mr-1" />}
+                        {status.text}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    {assignment.submissions.some(s => s.marks !== undefined) ? (
-                      <span className="text-sm font-semibold text-green-600">
-                        Graded
-                      </span>
-                    ) : (
-                      <span className="text-sm text-orange-600 flex items-center">
-                        <AlertTriangle className="h-3 w-3 mr-1" />
-                        Pending
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))
+                );
+              })
             ) : (
-              <p className="text-primary-500 text-center py-4">No assignments yet</p>
+              <div className="text-center py-8">
+                <FileText className="h-12 w-12 text-primary-300 mx-auto mb-4" />
+                <p className="text-primary-500">No assignments created yet</p>
+                <p className="text-sm text-primary-400">Create your first assignment to see it here</p>
+              </div>
             )}
           </div>
+          {recentAssignments.length === 4 && (
+            <div className="mt-4 pt-4 border-t border-primary-100">
+              <a 
+                href="/admin/assignments" 
+                className="text-primary-600 hover:text-primary-700 text-sm font-medium flex items-center justify-center"
+              >
+                View All Assignments <ArrowRight className="h-4 w-4 ml-1" />
+              </a>
+            </div>
+          )}
         </div>
 
         {/* Recent Students */}
         <div className="bg-white p-6 rounded-xl shadow-soft">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-primary-900">Recent Students</h2>
-            <Users className="h-5 w-5 text-primary-600" />
+            <div className="flex items-center space-x-2">
+              <Users className="h-5 w-5 text-primary-600" />
+              <a 
+                href="/students" 
+                className="text-primary-600 hover:text-primary-700 text-sm font-medium flex items-center"
+              >
+                View All <ArrowRight className="h-3 w-3 ml-1" />
+              </a>
+            </div>
           </div>
           <div className="space-y-4">
             {recentStudents.length > 0 ? (
-              recentStudents.map((student) => (
-                <div key={student._id} className="flex items-center p-3 bg-secondary-50 rounded-lg">
+              recentStudents.map((student, index) => (
+                <div key={student._id || student.id || index} className="flex items-center p-3 bg-secondary-50 rounded-lg">
                   <div className="w-10 h-10 bg-accent-600 rounded-full flex items-center justify-center mr-3">
                     <span className="text-white font-semibold">
-                      {student.name.charAt(0).toUpperCase()}
+                      {(student.name || 'U').charAt(0).toUpperCase()}
                     </span>
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-medium text-primary-900">{student.name}</h3>
-                    <p className="text-sm text-primary-600">{student.email}</p>
+                    <h3 className="font-medium text-primary-900">{student.name || 'Unknown User'}</h3>
+                    <p className="text-sm text-primary-600">{student.email || 'No email'}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-primary-500">
-                      {new Date(student.createdAt).toLocaleDateString()}
+                      {formatDate(student.createdAt)}
                     </p>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-primary-500 text-center py-4">No students yet</p>
+              <div className="text-center py-8">
+                <Users className="h-12 w-12 text-primary-300 mx-auto mb-4" />
+                <p className="text-primary-500">No students registered yet</p>
+                <p className="text-sm text-primary-400">Students will appear here when they register</p>
+              </div>
             )}
           </div>
+          {recentStudents.length === 4 && (
+            <div className="mt-4 pt-4 border-t border-primary-100">
+              <a 
+                href="/students" 
+                className="text-primary-600 hover:text-primary-700 text-sm font-medium flex items-center justify-center"
+              >
+                View All Students <ArrowRight className="h-4 w-4 ml-1" />
+              </a>
+            </div>
+          )}
         </div>
       </div>
 
